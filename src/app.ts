@@ -1,32 +1,29 @@
-import fastify, {
-  FastifyInstance,
-  FastifyReply,
-  FastifyRequest,
-  RouteOptions,
-} from 'fastify'
+import fastify from 'fastify'
 
-import { registerPlugins } from '@/fastify/plugins'
+import { registerPlugins } from '@/config/fastify/plugins'
 
-import { PrismaClient } from '@prisma/client'
+import { registerRoutes } from './http/routes'
+import { ZodError } from 'zod'
+import { env } from './config/env'
 
 export const app = fastify()
 
 registerPlugins(app)
 
-const routes: RouteOptions[] = [
-  {
-    method: 'POST',
-    url: '/users',
-    schema: {},
-    handler: async (request: FastifyRequest, reply: FastifyReply) => {
-      return reply.send({
-        ok: true,
-      })
-    },
-  },
-]
-
-const registerRoutes = async (fastify: FastifyInstance) =>
-  routes.forEach((route) => fastify.route(route))
-
 app.register(registerRoutes, { prefix: '/api' })
+
+app.setErrorHandler((error, _, reply) => {
+  if (error instanceof ZodError) {
+    return reply
+      .status(400)
+      .send({ message: 'Validation error', issues: error.format() })
+  }
+
+  if (env.NODE_ENV !== 'prd') {
+    console.log(error)
+  } else {
+    // TODO: Here we should log to a external tool like DataDog/NewRelic/Sentry
+  }
+
+  return reply.status(500).send({ message: 'Internal server error.' })
+})
